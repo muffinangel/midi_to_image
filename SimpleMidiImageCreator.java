@@ -10,11 +10,19 @@ public class SimpleMidiImageCreator {
 
     public static final int imageSize= 128;
 
+    /**
+     *
+     * @param simpleNoteList - already filtered list of notes
+     * @param pathToFile - should be png
+     * @param start - start time
+     * @param end - end time
+     * @param noteTimeScale - how to scale time
+     */
     public static void createSimplePianoRollFromNotes(List<NoteInformation> simpleNoteList, String pathToFile,
-                                             int start, int end) {
+                                             int start, int end, Double noteTimeScale) {
 
         // create the picture
-        BufferedImage bufferedImage = new BufferedImage(imageSize, imageSize, BufferedImage.TYPE_INT_RGB);
+        BufferedImage bufferedImage = new BufferedImage(imageSize , imageSize, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2d = bufferedImage.createGraphics();
         // fill all the image with white
         g2d.setColor(Color.black);
@@ -31,11 +39,14 @@ public class SimpleMidiImageCreator {
                 volacityAtEnd = 0;
             Color color = new Color(volacity, simpleNote.tempo % 255, volacityAtEnd);
             g2d.setColor(color);
-            System.out.print(height + "(" + simpleNote.startTime + ":" + simpleNote.endTime + ")");
-            System.out.print(", ");
             // TODO: do some notes validations
-            int startTime = (int) Math.round(simpleNote.getStartTimeInSeconds());
-            int endTime =(int) Math.round((simpleNote.getEndTimeInSeconds()));
+            int startTime = (int) Math.round(simpleNote.getStartTimeInMilliSeconds() * noteTimeScale);
+            int endTime =(int) Math.round((simpleNote.getEndTimeInMilliSeconds() * noteTimeScale));
+            if(endTime != startTime && startTime < endTime)
+                System.out.println(height + "(" + startTime + "/" + simpleNote.startTime + ":" + endTime + ")");
+//            System.out.print(", ");
+
+
             g2d.fillRect((int) (startTime - start), height, (int) (endTime - startTime) + 1, 1);
         }
         System.out.println(" ");
@@ -63,11 +74,13 @@ public class SimpleMidiImageCreator {
             return null;
         }
 
-        float PPQ = 480;
+        float PPQ = 480; // TODO delete PPQ
+        float divisionTime = 0; // TODO read those from filename
+        float resolution = PPQ;
 
         List<NoteInformation> notes = new ArrayList<>();
         var guard = new NoteInformation(null, null, null, null, null, null, 0,
-                null, null);
+                null, null, 0, 0);
         notes.add(guard);
 
         int width = bufferedImage.getWidth();
@@ -88,7 +101,8 @@ public class SimpleMidiImageCreator {
 
                     if(!areValuesEqual(noteToCompare, volacity, tempo, volacityAtEnd, y)) {
                         // Time to add a new note and maybe complete the previous
-                        var newNote = new NoteInformation(null, null, null, y, volacity, volacityAtEnd, PPQ, tempo, null);
+                        var newNote = new NoteInformation(null, null, null,
+                                y, volacity, volacityAtEnd, PPQ, tempo, null, divisionTime, resolution);
                         newNote.startTime = newNote.convertToTicks(Double.valueOf(x));
                         notes.add(newNote);
                     }

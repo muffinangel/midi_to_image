@@ -20,6 +20,7 @@ public class NoteProvider {
     private static int tempo = 120; // BMP, can be changed in set tempo events
     private static float PPQ = 480; // set once in midi header
     private static int resolution;
+    private static float division;
     private static int microsecondPerQuaterNote = 500000;
     private static Map<Integer, String> instrumentPerChannel = new HashMap<>();
     private static Integer channelPrefixSet = null;
@@ -35,13 +36,17 @@ public class NoteProvider {
             e.printStackTrace();
         }
 
-        if(sequence.PPQ != 0) {
-            this.PPQ = sequence.PPQ;
-        }
+        this.PPQ = sequence.PPQ;
+        this.division = sequence.getDivisionType();
+        this.resolution = sequence.getResolution();
 
-        if(sequence.getResolution() != 0) {
-            this.resolution = sequence.getResolution();
-        }
+        System.out.println("PPQ = " + this.PPQ);
+        System.out.println("Division = " + this.division);
+        System.out.println("Resolution = " + this.resolution);
+
+//        if(sequence.getResolution() != 0) {
+//            this.resolution = sequence.getResolution();
+//        }
 
         Map<Integer, List<NoteInformation>> notesOn = new HashMap<>();
         Map<Integer, List<NoteInformation>> notesOff = new HashMap<>();
@@ -65,7 +70,7 @@ public class NoteProvider {
                         int note = key % 12;
                         int velocity = sm.getData2();
                         long time = event.getTick();
-                        System.out.println("Note on, " + octave + " key=" + key + " velocity: " + velocity);
+                        //System.out.println("Note on, " + octave + " key=" + key + " velocity: " + velocity + " tick: " + time);
                         addNoteToMap(key, velocity, time, channel, true, notesOn);
                     } else if (sm.getCommand() == NOTE_OFF) {
                         int key = sm.getData1();
@@ -73,7 +78,7 @@ public class NoteProvider {
                         int note = key % 12;
                         int velocity = sm.getData2();
                         long time = event.getTick();
-                        System.out.println("Note off, " + octave + " key=" + key + " velocity: " + velocity);
+                        //System.out.println("Note off, " + octave + " key=" + key + " velocity: " + velocity);
                         addNoteToMap(key, velocity, time, channel, false, notesOff);
                     } else {
                         System.out.println("Command:" + sm.getCommand());
@@ -143,7 +148,7 @@ public class NoteProvider {
 
     public File getMidiFile(Map<Integer, List<NoteInformation>> notes, Map<Integer, String> instrumentPerChannel, String fileName) {
         try {
-            Sequence sec = new Sequence(getPPQ(notes), getResolution(notes));
+            Sequence sec = new Sequence(getDivisionType(notes), Math.round(getResolution(notes)));
             for(var channel : notes.keySet()) {
                 Track t =  sec.createTrack();
                 // TODO set the channel
@@ -155,7 +160,7 @@ public class NoteProvider {
                 t.add(me);
                 //****  set tempo (meta event)  ****
                 MetaMessage mt = new MetaMessage();
-                byte[] bt = {0x02, (byte)0x00, 0x00}; // TODO get tempo from note
+                byte[] bt = getTempo(notes.get(channel));
                 mt.setMessage(0x51 ,bt, 3);
                 me = new MidiEvent(mt,(long)0);
                 t.add(me);
@@ -172,9 +177,10 @@ public class NoteProvider {
                 t.add(me);
                 // TODO change it
                 //****  set instrument to Piano  ****
-                mm = new ShortMessage();
-                mm.setMessage(0xC0, 0x00, 0x00);
-                me = new MidiEvent(mm,(long)0);
+                String piano = "piano";
+                mt = new MetaMessage();
+                mt.setMessage(INSTRUMENT_NAME, piano.getBytes(), piano.length());
+                me = new MidiEvent(mt,(long)0);
                 t.add(me);
 
                 long maxEndValue = 0;
@@ -194,6 +200,8 @@ public class NoteProvider {
 
                     if(n.endTime > maxEndValue)
                         maxEndValue = n.endTime;
+
+                    break;
                 }
 
                 //****  set end of track (meta event) 10 ticks later  ****
@@ -219,18 +227,41 @@ public class NoteProvider {
         return null;
     }
 
-    private float getPPQ(Map<Integer, List<NoteInformation>> notes) { // TODO
-        // get PPQ from the channel that is the smallest integer and the first played note
-        return javax.sound.midi.Sequence.PPQ;
+    private float getDivisionType(Map<Integer, List<NoteInformation>> notes) { // TODO
+        // get division time from the channel that is the smallest integer and the first played note
+        if(notes.isEmpty())
+            return 0;
+        var channels = notes.keySet();
+        var noteFromChannel = notes.get(channels.toArray()[0]);
+        return noteFromChannel.get(0).divisionTime;
     }
 
-    private int getResolution(Map<Integer, List<NoteInformation>> notes) { // TODO
+    private float getResolution(Map<Integer, List<NoteInformation>> notes) { // TODO
         // get resolution (tempo?)
-        return 24;
+        if(notes.isEmpty())
+            return 24;
+        var channels = notes.keySet();
+        var noteFromChannel = notes.get(channels.toArray()[0]);
+        return noteFromChannel.get(0).resolution;
     }
 
-    private Integer getChannelFromName(String name) {
+    private Integer getChannelFromName(String name) { // TODO
         return null;
+    }
+
+    private byte[] getTempo(List<NoteInformation> notes) { // TODO
+        byte[] data =  {0x02, (byte)0x00, 0x00};
+        if(notes.isEmpty())
+            return data; // it doesn't matter
+
+        int tempoFromNote = notes.get(0).tempo;
+        int tempoinBMP =   60000000 / tempoFromNote;
+        data[2] = (byte) tempoinBMP;
+        data[1] = (byte) (tempoinBMP >>> 8);
+        data[0] = (byte) (tempoinBMP >>> 8);
+
+        //int tempoinBMP = (data[0] & 0xff) << 16 | (data[1] & 0xff) << 8 | (data[2] & 0xff);
+        return data;
     }
 
     public Map<Integer, List<NoteInformation>> getMidiNotes(Map<Integer, List<NoteInformation>> on, Map<Integer, List<NoteInformation>> off) {
@@ -272,7 +303,7 @@ public class NoteProvider {
         }
 
         list.add(new NoteInformation(startTime, endTime, channel, key, startVelocity, endVelocity,
-                this.PPQ, this.tempo, instrumentPerChannel.get(channel)));
+                this.PPQ, this.tempo, instrumentPerChannel.get(channel), division, resolution));
     }
 
     private NoteInformation mergeMatchingNotes(NoteInformation noteOn, List<NoteInformation> notesOff) {
@@ -298,7 +329,7 @@ public class NoteProvider {
 
         return new NoteInformation(noteOn.startTime, bestNote.endTime,
                 noteOn.channel, noteOn.key, noteOn.velocity, bestNote.velocity,
-                noteOn.PPQ, noteOn.tempo, noteOn.instrument);
+                noteOn.PPQ, noteOn.tempo, noteOn.instrument, division, resolution);
     }
 
     private List<NoteInformation> mergeNotesInformation(List<NoteInformation> notesOn, List<NoteInformation> notesOff) {
@@ -312,7 +343,7 @@ public class NoteProvider {
             else {
                 var matchedNoteOff = new NoteInformation(null, matched.endTime,
                         matched.channel, matched.key, null, matched.velocityAtEnd,
-                        matched.PPQ, matched.tempo, matched.instrument);
+                        matched.PPQ, matched.tempo, matched.instrument, matched.divisionTime, matched.resolution);
                 notesOff.remove(matchedNoteOff);
             }
         }
@@ -321,34 +352,58 @@ public class NoteProvider {
         return merged;
     }
 
-    public List<NoteInformation> filterNotes(List<NoteInformation> notes, long start, long end, boolean cutNotes) {
+    /**
+     *
+     * @param notes - list of notes @NotNull
+     * @param start - in milliseconds
+     * @param end - in milliseconds
+     * @param cutNotes - if beginning of note or end of it is outside of boundaries, then if this is set to true, the part of the note
+     *                 that is inside time boundaries is added
+     * @param noteTimeScale - how to scale time
+     * @return - list of filtered notes within time boundaries @NotNull
+     */
+    public List<NoteInformation> filterNotes(List<NoteInformation> notes, long start, long end, Double noteTimeScale, boolean cutNotes) {
         List<NoteInformation> noteInformations = new ArrayList<>();
         System.out.println("Note size " + notes.size());
         double maxMidiOff = 0;
         for(var n: notes) {
             //System.out.println(n);
-            var noteStart = n.getStartTimeInSeconds();
-            var noteEnd = n.getEndTimeInSeconds();
+            System.out.println("# start = " + n.startTime + " : " + n.tickToMilliseconds(n.startTime) + "ms ; end = "
+                    + n.endTime + " : " + n.tickToMilliseconds(n.endTime) + " ms");
+            var noteStart = n.getStartTimeInMilliSeconds();
+            var noteEnd = n.getEndTimeInMilliSeconds();
             if(noteEnd != null && noteStart != null) {
+                noteStart = noteStart * noteTimeScale;
+                noteEnd = noteEnd * noteTimeScale;
                 if(maxMidiOff < noteEnd) {
                     maxMidiOff = noteEnd;
                 }
                 if (noteStart.intValue() >= start && noteEnd.intValue() <= end) {
                     noteInformations.add(n);
                 } else if (cutNotes) {
-                    if (noteStart.intValue() >= start) {
-                        noteInformations.add(new NoteInformation(n.startTime, n.endTime,
+                    if (noteStart.intValue() >= start && noteStart <= end) {
+                        noteInformations.add(new NoteInformation(n.startTime, n.convertToTicks(Double.valueOf(end)),
                                 n.channel, n.key, n.velocity, n.velocityAtEnd,
-                                n.PPQ, n.tempo, n.instrument));
-                    } else if (noteEnd.intValue() <= end) {
-                        noteInformations.add(new NoteInformation(n.startTime, n.endTime,
+                                n.PPQ, n.tempo, n.instrument, n.divisionTime, n.resolution));
+                    } else if (noteEnd.intValue() <= end && start <= noteEnd) {
+                        noteInformations.add(new NoteInformation(n.convertToTicks(Double.valueOf(start)), n.endTime,
                                 n.channel, n.key, n.velocity, n.velocityAtEnd,
-                                n.PPQ, n.tempo, n.instrument));
+                                n.PPQ, n.tempo, n.instrument, n.divisionTime, n.resolution));
                     }
                 }
             }
-            else if(cutNotes) {
-                // TODO
+            else if(cutNotes && noteStart != null) {
+                // get this note from min(note start time, start param) to end param
+                noteStart = noteStart * noteTimeScale;
+                if(noteStart >= start && noteStart <= end)
+                noteInformations.add(new NoteInformation(n.startTime, n.convertToTicks(Double.valueOf(end)),
+                        n.channel, n.key, n.velocity, n.velocityAtEnd,
+                        n.PPQ, n.tempo, n.instrument, n.divisionTime, n.resolution));
+                else if(noteStart < start)
+                    noteInformations.add(new NoteInformation( n.convertToTicks(Double.valueOf(start)),
+                            n.convertToTicks(Double.valueOf(end)),
+                            n.channel, n.key, n.velocity, n.velocityAtEnd,
+                            n.PPQ, n.tempo, n.instrument, n.divisionTime, n.resolution));
             }
         }
 
