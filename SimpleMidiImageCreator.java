@@ -64,7 +64,7 @@ public class SimpleMidiImageCreator {
     }
 
 
-    public static List<NoteInformation> createNotesFromSimplePianoRoll(String pathToFile) {
+    public static List<NoteInformation> createNotesFromSimplePianoRoll(String pathToFile, Double noteTimeScale) {
         File file = new File(pathToFile);
         BufferedImage bufferedImage = null;
         try {
@@ -103,12 +103,12 @@ public class SimpleMidiImageCreator {
                         // Time to add a new note and maybe complete the previous
                         var newNote = new NoteInformation(null, null, null,
                                 y, volacity, volacityAtEnd, PPQ, tempo, null, divisionTime, resolution);
-                        newNote.startTime = newNote.convertToTicks(Double.valueOf(x));
+                        newNote.startTime = newNote.convertToTicks(Double.valueOf(x)/noteTimeScale);
                         notes.add(newNote);
                     }
                 }
 
-                completeNoteIfNeccessary(noteToCompare, x, y);
+                completeNoteIfNeccessary(noteToCompare, x, y, noteTimeScale);
             }
         }
 
@@ -139,14 +139,14 @@ public class SimpleMidiImageCreator {
         return true;
     }
 
-    private static void completeNoteIfNeccessary(NoteInformation note, int x, int y) {
+    private static void completeNoteIfNeccessary(NoteInformation note, int x, int y, Double noteTimeScale) {
         Long endTime = note.endTime;
         if(endTime != null || note.key == null) return;
 
         if(y != note.key) { // we are in a different line, so end time should be imageSize - 1
-            note.endTime = note.convertToTicks(Double.valueOf(imageSize - 1));
+            note.endTime = note.convertToTicks(Double.valueOf(imageSize - 1)/noteTimeScale);
         } else {
-            note.endTime = note.convertToTicks(Double.valueOf(x - 1));
+            note.endTime = note.convertToTicks(Double.valueOf(x - 1)/noteTimeScale);
         }
     }
 }
