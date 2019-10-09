@@ -64,7 +64,6 @@ public class NoteInformation {
         if(tick == null) return (double) 0;
         if(divisionTime != Sequence.PPQ) {
             Double t = Double.valueOf(60000000 / tempo);
-            System.out.println("-------------:)-------------");
             Double scale = 1000 / (t * (double) divisionTime * (double) resolution);
             return tick*scale;
         }
