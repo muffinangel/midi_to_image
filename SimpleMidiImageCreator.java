@@ -43,7 +43,8 @@ public class SimpleMidiImageCreator {
             int startTime = (int) Math.round(simpleNote.getStartTimeInMilliSeconds() * noteTimeScale);
             int endTime =(int) Math.round((simpleNote.getEndTimeInMilliSeconds() * noteTimeScale));
             if(endTime != startTime && startTime < endTime)
-                System.out.println(height + "(" + startTime + "/" + simpleNote.startTime + ":" + endTime + ")");
+                System.out.println(height + "(" + startTime + "/" + simpleNote.startTime + ":" + endTime +
+                        "/" + simpleNote.endTime + ")");
 //            System.out.print(", ");
 
 
@@ -86,14 +87,18 @@ public class SimpleMidiImageCreator {
         int width = bufferedImage.getWidth();
         int height = bufferedImage.getHeight();
 
+        int prevCLR;
         for(var y = 0; y < height; y++) {
+            prevCLR = -1;
             for(var x = 0; x < width; x++) {
                 int clr = bufferedImage.getRGB(x,y);
                 int  red   = (clr & 0x00ff0000) >> 16;
                 int  green = (clr & 0x0000ff00) >> 8;
                 int  blue  =  clr & 0x000000ff;
                 var noteToCompare = notes.get(notes.size() - 1);
-                if(red != 0 || green != 0 || blue != 0) { // tempo can't be 0 and volacity shouldnt be 0
+                boolean notBlack = (red != 0 || green != 0 || blue != 0);
+                boolean differenceBetweenTwoPixels = prevCLR != clr;
+                if(notBlack && differenceBetweenTwoPixels) { // tempo can't be 0 and volacity shouldnt be 0
                     int volacity = red;
                     int tempo = green; // TODO only < 255 values
                     int volacityAtEnd = blue;
@@ -108,7 +113,11 @@ public class SimpleMidiImageCreator {
                     }
                 }
 
+                // we want o complete if the new color has started or it is the end of the image
+                boolean uncompletedNoteAtTheEdge = (notBlack && x == width - 1); // edge of the imgae
+                if(uncompletedNoteAtTheEdge || differenceBetweenTwoPixels)
                 completeNoteIfNeccessary(noteToCompare, x, y, noteTimeScale);
+                prevCLR = clr;
             }
         }
 
