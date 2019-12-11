@@ -11,6 +11,20 @@ import java.util.stream.Stream;
 
 public class FileHelper {
     public static ArrayList<String> fileNames = new ArrayList<>();
+    public static enum DIVIDING_OPTION {
+        NORMAL,
+        TIME_OVERLAPPING
+    }
+
+    private static DIVIDING_OPTION option = DIVIDING_OPTION.NORMAL;
+
+    public static void setDividingOption(DIVIDING_OPTION opt) {
+        option = opt;
+    }
+
+    public static DIVIDING_OPTION getDividingOption() {
+        return option;
+    }
 
     public static void loadFiles(String path) {
         try (Stream<Path> walk = Files.walk(Paths.get(path))) {
@@ -42,7 +56,10 @@ public class FileHelper {
                     name = name.substring(0, lastDot);
                     System.out.println(name);
                     var notes = noteProvider.getMidiNotes(fileName);
-                    divideFile(noteProvider, notes, scale, pathToFolder, name);
+                    if (option == DIVIDING_OPTION.NORMAL)
+                        divideFile(noteProvider, notes, scale, pathToFolder, name);
+                    else if(option == DIVIDING_OPTION.TIME_OVERLAPPING)
+                        divideFileTimeOverlapping(noteProvider, notes, scale, 0.8, 8,pathToFolder, name);
                 }
             }
         }
@@ -78,6 +95,42 @@ public class FileHelper {
                             nextNotesFiltered, folder + "\\" + fileName + "_ch" + channel + "_" + counter++ + ".png",
                             nextStart, nextEnd - 1, scale);
                 }
+            } while(!stop);
+        }
+    }
+
+    public static void divideFileTimeOverlapping(NoteProvider noteProvider, Map<Integer, List<NoteInformation>> notes, double scale, double prevTimeProportion, int minimalNumberOfNotes, String folder, String fileName) {
+        for(var channel: notes.keySet()) {
+            boolean stop = false;
+            int start = 0;
+            int end = 128;
+            int counter = 0; // for the fileNames
+            int timeStep = (int) (128*prevTimeProportion);
+
+            do {
+                var notesFiltered = noteProvider.filterNotes(notes.get(channel), start, end - 1, scale,  true);
+                int notesFilteredStart = start;
+                int notesFilteredEnd = end;
+                start += timeStep;
+                end += timeStep;
+                var nextNotesFiltered = noteProvider.filterNotes(notes.get(channel), start, end - 1, scale,  true);
+                int nextStart = start;
+                int nextEnd = end;
+                start += timeStep;
+                end += timeStep;
+                if(nextNotesFiltered.isEmpty() || nextNotesFiltered.size() < minimalNumberOfNotes) {
+                    stop = true;
+                } else {
+                    if(notesFiltered.size() > minimalNumberOfNotes)
+                        SimpleMidiImageCreator.createSimplePianoRollFromNotes(
+                                notesFiltered, folder + "\\" + fileName + "_ch" + channel + "_" + counter++ + ".png",
+                                notesFilteredStart, notesFilteredEnd - 1, scale);
+                    if(nextNotesFiltered.size() > minimalNumberOfNotes)
+                        SimpleMidiImageCreator.createSimplePianoRollFromNotes(
+                                nextNotesFiltered, folder + "\\" + fileName + "_ch" + channel + "_" + counter++ + ".png",
+                                nextStart, nextEnd - 1, scale);
+                }
+
             } while(!stop);
         }
     }
