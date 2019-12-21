@@ -1,0 +1,8 @@
+# Java
+kaitai/
+GAN_network/music_*/
+GAN_network/out2/
+GAN_network/.vscode/
+GAN_network/__pycache__/
+GAN_network/tensorboard_data/
+
